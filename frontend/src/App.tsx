@@ -1,12 +1,37 @@
-import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { isAuthenticated, clearToken } from "./lib/auth";
+import Login from "./components/Login";
 import DashboardPage from "./pages/index";
 import TicketPage from "./pages/tickets";
 import AnalyticsPage from "./pages/analytics";
 import SettingsPage from "./pages/settings";
 
-export default function App() {
+function AppContent() {
+  const [authenticated, setAuthenticated] = useState(isAuthenticated());
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setAuthenticated(isAuthenticated());
+  }, []);
+
+  function handleLoginSuccess() {
+    setAuthenticated(true);
+    navigate("/dashboard");
+  }
+
+  function handleLogout() {
+    clearToken();
+    setAuthenticated(false);
+    navigate("/");
+  }
+
+  if (!authenticated) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
-    <BrowserRouter>
+    <>
       <nav className="topnav">
         <span className="brand">SuportIA</span>
         <NavLink to="/dashboard" className={({ isActive }) => (isActive ? "active" : "")}>
@@ -18,6 +43,13 @@ export default function App() {
         <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
           Configurações
         </NavLink>
+        <button
+          className="btn btn-secondary"
+          style={{ marginLeft: "auto" }}
+          onClick={handleLogout}
+        >
+          Sair
+        </button>
       </nav>
       <div className="container">
         <Routes>
@@ -28,6 +60,8 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>
-    </BrowserRouter>
+    </>
   );
 }
+
+export default AppContent;

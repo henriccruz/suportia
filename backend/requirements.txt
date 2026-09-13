@@ -7,3 +7,5 @@ python-dotenv==1.0.1
 anthropic==0.125.0
 twilio==9.3.2
 python-multipart==0.0.9
+PyJWT==2.8.1
+bcrypt==4.1.2

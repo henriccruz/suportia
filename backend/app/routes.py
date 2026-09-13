@@ -1,24 +1,39 @@
 """Definição de todos os endpoints da API."""
+from __future__ import annotations
+
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.auth import create_access_token, hash_password, verify_password, verify_token
 from app.claude_service import generate_response
 from app.database import (
     Conversation,
     ResolutionType,
     Ticket,
     TicketStatus,
+    User,
     get_db,
 )
 from app.models import AnalyticsOut, CustomResponseIn, TicketDetailOut, TicketOut
 from app.twilio_service import send_message
 
 router = APIRouter(prefix="/api")
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 def _next_message_order(db: Session, ticket_id: str) -> int:
@@ -28,6 +43,18 @@ def _next_message_order(db: Session, ticket_id: str) -> int:
         .scalar()
     )
     return (last or 0) + 1
+
+
+@router.post("/auth/login", response_model=LoginResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    """Faz login e retorna JWT token."""
+    user = db.query(User).filter(User.username == payload.username).first()
+
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
+
+    token = create_access_token(user.username)
+    return LoginResponse(access_token=token)
 
 
 @router.post("/messages/webhook")
@@ -94,6 +121,7 @@ def list_tickets(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     db: Session = Depends(get_db),
+    username: str = Depends(verify_token),
 ):
     """Lista os últimos 100 tickets, com filtros opcionais por status e data."""
     query = db.query(Ticket)
@@ -110,7 +138,7 @@ def list_tickets(
 
 
 @router.get("/tickets/{ticket_id}", response_model=TicketDetailOut)
-def get_ticket(ticket_id: str, db: Session = Depends(get_db)):
+def get_ticket(ticket_id: str, db: Session = Depends(get_db), username: str = Depends(verify_token)):
     ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket não encontrado")
@@ -134,7 +162,7 @@ def _get_ticket_or_404(db: Session, ticket_id: str) -> Ticket:
 
 
 @router.post("/tickets/{ticket_id}/approve", response_model=TicketOut)
-def approve_ticket(ticket_id: str, db: Session = Depends(get_db)):
+def approve_ticket(ticket_id: str, db: Session = Depends(get_db), username: str = Depends(verify_token)):
     """Aprova a resposta da IA, marca o ticket como resolvido e envia a resposta final ao cliente."""
     ticket = _get_ticket_or_404(db, ticket_id)
     if not ticket.ai_response:
@@ -151,7 +179,7 @@ def approve_ticket(ticket_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/tickets/{ticket_id}/reject", response_model=TicketOut)
-def reject_ticket(ticket_id: str, db: Session = Depends(get_db)):
+def reject_ticket(ticket_id: str, db: Session = Depends(get_db), username: str = Depends(verify_token)):
     """Rejeita a resposta da IA e marca o ticket para revisão manual."""
     ticket = _get_ticket_or_404(db, ticket_id)
     ticket.status = TicketStatus.REJECTED
@@ -161,7 +189,7 @@ def reject_ticket(ticket_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/tickets/{ticket_id}/custom-response", response_model=TicketOut)
-def custom_response(ticket_id: str, payload: CustomResponseIn, db: Session = Depends(get_db)):
+def custom_response(ticket_id: str, payload: CustomResponseIn, db: Session = Depends(get_db), username: str = Depends(verify_token)):
     """Permite que o agente envie uma resposta customizada e marque o ticket como resolvido."""
     ticket = _get_ticket_or_404(db, ticket_id)
     ticket.manual_response = payload.response_text
@@ -176,7 +204,7 @@ def custom_response(ticket_id: str, payload: CustomResponseIn, db: Session = Dep
 
 
 @router.get("/analytics", response_model=AnalyticsOut)
-def analytics(db: Session = Depends(get_db)):
+def analytics(db: Session = Depends(get_db), username: str = Depends(verify_token)):
     total_tickets = db.query(func.count(Ticket.ticket_id)).scalar() or 0
 
     resolved_by_ai = (

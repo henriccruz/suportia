@@ -1,10 +1,17 @@
 import type { Analytics, TicketDetail, TicketStatus, Ticket } from "./types";
+import { getToken } from "./auth";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
   if (!res.ok) {
@@ -12,6 +19,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(`Erro ${res.status}: ${detail}`);
   }
   return res.json() as Promise<T>;
+}
+
+export async function login(username: string, password: string): Promise<string> {
+  const res = await fetch(`${API_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    throw new Error("Falha no login");
+  }
+  const data = (await res.json()) as { access_token: string };
+  return data.access_token;
 }
 
 export function listTickets(filters: { status?: TicketStatus; date_from?: string; date_to?: string }) {

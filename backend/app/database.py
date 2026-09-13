@@ -60,6 +60,15 @@ class Conversation(Base):
     timestamp = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    user_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String(80), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
