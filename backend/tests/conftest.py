@@ -1,8 +1,9 @@
 """Fixtures para testes."""
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
@@ -11,7 +12,19 @@ from app.database import Base, get_db
 @pytest.fixture
 def db_session():
     """Cria um banco de dados em memória para testes."""
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    # Ativa suporte a foreign keys no SQLite
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()
@@ -22,6 +35,14 @@ def db_session():
 @pytest.fixture
 def client(db_session):
     """Client de teste com banco em memória."""
+    from app.database import User
+    from app.auth import hash_password
+
+    # Criar usuário admin no banco de teste
+    admin = User(username="admin", hashed_password=hash_password("admin"))
+    db_session.add(admin)
+    db_session.commit()
+
     def override_get_db():
         yield db_session
 

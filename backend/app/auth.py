@@ -3,13 +3,11 @@ from __future__ import annotations
 
 import jwt
 from datetime import datetime, timezone, timedelta
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi import Depends, HTTPException, status, Header
+from typing import Optional
 import bcrypt
 
 from app.config import settings
-
-security = HTTPBearer()
 
 SECRET_KEY = "suportia-secret-key-change-in-production"
 ALGORITHM = "HS256"
@@ -34,8 +32,11 @@ def create_access_token(username: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_token(credentials: HTTPAuthCredentials = Depends(security)) -> str:
-    token = credentials.credentials
+def verify_token(authorization: Optional[str] = Header(None)) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid token")
+
+    token = authorization[7:]  # Remove "Bearer " prefix
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
