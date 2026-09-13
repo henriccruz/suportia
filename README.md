@@ -4,6 +4,10 @@ Plataforma que recebe mensagens via WhatsApp/SMS (Twilio), processa com a Claude
 e retorna respostas automáticas, com um dashboard React para revisar, aprovar ou
 customizar as respostas antes de resolver os tickets.
 
+**Status**: MVP pronto para produção | **Próxima fase**: Analytics avançado, WebSocket, multi-canal
+
+**Links rápidos**: [Deployment Guide](DEPLOYMENT.md) | [Roadmap Fase 2](PHASE2.md) | [Como Contribuir](CONTRIBUTING.md)
+
 ## Estrutura do projeto
 
 ```
@@ -126,6 +130,40 @@ Frontend (`frontend/.env`):
 ```
 VITE_API_URL=http://localhost:8000
 ```
+
+## Testes
+
+### Backend
+
+```bash
+cd backend && source .venv/bin/activate && pytest
+```
+
+Testes incluem:
+- Autenticação (hash/verify, token creation)
+- Endpoints protegidos (require auth)
+- Login/logout flow
+- Analytics calculation
+
+### Frontend
+
+Frontend atualmente sem testes automatizados. Roadmap Fase 2: Vitest + React Testing Library.
+
+---
+
+## Docker
+
+Suba toda a stack com Docker:
+
+```bash
+docker-compose up
+```
+
+Isso inicia:
+- Backend FastAPI em `http://localhost:8000`
+- (Frontend precisa de setup adicional, ver `DEPLOYMENT.md`)
+
+---
 
 ## Deploy
 
