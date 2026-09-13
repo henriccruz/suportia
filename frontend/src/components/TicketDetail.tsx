@@ -85,13 +85,46 @@ export default function TicketDetail() {
       </p>
 
       <div className="card" style={{ marginTop: 16, marginBottom: 16 }}>
-        <h3>Conversa</h3>
+        <h3>Histórico de Conversa</h3>
         {ticket.conversation.length === 0 && <p className="muted">Sem histórico de conversa.</p>}
-        {ticket.conversation.map((msg) => (
-          <div key={msg.conversation_id} className={`message-bubble ${msg.is_customer ? "customer" : "ai"}`}>
-            {msg.message_text}
-          </div>
-        ))}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            maxHeight: 400,
+            overflowY: "auto",
+          }}
+        >
+          {ticket.conversation.map((msg) => (
+            <div key={msg.conversation_id} style={{ display: "flex", gap: 8 }}>
+              <div
+                style={{
+                  flexShrink: 0,
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: msg.is_customer ? "#dbeafe" : "#dcfce7",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                {msg.is_customer ? "C" : "IA"}
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px 0" }}>
+                  {msg.is_customer ? "Cliente" : "IA"} • {new Date(msg.timestamp).toLocaleTimeString("pt-BR")}
+                </p>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+                  {msg.message_text}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {ticket.manual_response && (

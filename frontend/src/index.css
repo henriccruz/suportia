@@ -144,6 +144,19 @@ th {
   font-size: 13px;
 }
 
+.filters input[type="text"] {
+  flex: 1;
+  max-width: 300px;
+}
+
+.filters label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
 .message-bubble {
   padding: 10px 14px;
   border-radius: 10px;
