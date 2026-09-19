@@ -9,6 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from xml.sax.saxutils import escape as xml_escape
 
 from app.auth import create_access_token, hash_password, verify_password, verify_token
 from app.claude_service import generate_response
@@ -89,7 +90,14 @@ async def messages_webhook(
         ticket.message_text = message_text
         ticket.status = TicketStatus.PENDING_APPROVAL
 
-    ai_response = generate_response(message_text, customer_name=ticket.customer_name)
+    try:
+        ai_response = generate_response(message_text, customer_name=ticket.customer_name)
+    except Exception:
+        # Se a IA falhar, o ticket ainda precisa existir para um humano assumir -
+        # perder a mensagem do cliente aqui seria pior do que responder sem IA.
+        ai_response = None
+        ticket.status = TicketStatus.OPEN
+
     ticket.ai_response = ai_response
 
     order = _next_message_order(db, ticket.ticket_id)
@@ -100,18 +108,27 @@ async def messages_webhook(
         message_text=message_text,
         timestamp=received_at,
     ))
-    db.add(Conversation(
-        ticket_id=ticket.ticket_id,
-        message_order=order + 1,
-        is_customer=False,
-        message_text=ai_response,
-        timestamp=datetime.now(timezone.utc),
-    ))
+    if ai_response is not None:
+        db.add(Conversation(
+            ticket_id=ticket.ticket_id,
+            message_order=order + 1,
+            is_customer=False,
+            message_text=ai_response,
+            timestamp=datetime.now(timezone.utc),
+        ))
 
     db.commit()
 
     # Responde imediatamente ao cliente via TwiML (auto-resposta do Twilio).
-    twiml = f"<?xml version='1.0' encoding='UTF-8'?><Response><Message>{ai_response}</Message></Response>"
+    reply_text = (
+        ai_response
+        if ai_response is not None
+        else "Recebemos sua mensagem e já vamos te responder."
+    )
+    twiml = (
+        "<?xml version='1.0' encoding='UTF-8'?>"
+        f"<Response><Message>{xml_escape(reply_text)}</Message></Response>"
+    )
     return Response(content=twiml, media_type="application/xml")
 
 
