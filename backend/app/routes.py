@@ -4,15 +4,17 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from twilio.request_validator import RequestValidator
 from xml.sax.saxutils import escape as xml_escape
 
 from app.auth import create_access_token, hash_password, verify_password, verify_token
 from app.claude_service import generate_response
+from app.config import settings
 from app.database import (
     Conversation,
     ResolutionType,
@@ -58,7 +60,20 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     return LoginResponse(access_token=token)
 
 
-@router.post("/messages/webhook")
+async def _verify_twilio_signature(request: Request) -> None:
+    """Garante que o webhook só processa requisições assinadas de verdade pelo Twilio.
+
+    Sem isso, o endpoint é público e qualquer um poderia chamá-lo direto,
+    gerando chamadas pagas à Claude API por fora do Twilio.
+    """
+    signature = request.headers.get("x-twilio-signature", "")
+    form = await request.form()
+    validator = RequestValidator(settings.twilio_auth_token)
+    if not validator.validate(str(request.url), dict(form), signature):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Assinatura do Twilio inválida")
+
+
+@router.post("/messages/webhook", dependencies=[Depends(_verify_twilio_signature)])
 async def messages_webhook(
     From: str = Form(...),
     Body: str = Form(...),
@@ -185,13 +200,18 @@ def approve_ticket(ticket_id: str, db: Session = Depends(get_db), username: str 
     if not ticket.ai_response:
         raise HTTPException(status_code=400, detail="Ticket não possui resposta de IA para aprovar")
 
+    # Envia antes de marcar como resolvido - se o Twilio falhar, o ticket
+    # continua pending_approval em vez de mentir que o cliente foi respondido.
+    try:
+        send_message(ticket.customer_phone, ticket.ai_response)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao enviar mensagem via Twilio: {exc}")
+
     ticket.status = TicketStatus.RESOLVED
     ticket.resolution_type = ResolutionType.AI_APPROVED
     ticket.resolved_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ticket)
-
-    send_message(ticket.customer_phone, ticket.ai_response)
     return ticket
 
 
@@ -209,14 +229,18 @@ def reject_ticket(ticket_id: str, db: Session = Depends(get_db), username: str =
 def custom_response(ticket_id: str, payload: CustomResponseIn, db: Session = Depends(get_db), username: str = Depends(verify_token)):
     """Permite que o agente envie uma resposta customizada e marque o ticket como resolvido."""
     ticket = _get_ticket_or_404(db, ticket_id)
+
+    try:
+        send_message(ticket.customer_phone, payload.response_text)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Falha ao enviar mensagem via Twilio: {exc}")
+
     ticket.manual_response = payload.response_text
     ticket.status = TicketStatus.RESOLVED
     ticket.resolution_type = ResolutionType.MANUAL
     ticket.resolved_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ticket)
-
-    send_message(ticket.customer_phone, payload.response_text)
     return ticket
 
 
