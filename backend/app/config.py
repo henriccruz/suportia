@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     twilio_phone_number: str = ""
 
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-5-sonnet-20241022"
+    anthropic_model: str = "claude-opus-5"
 
     database_url: str = "sqlite:///./suportia.db"
 

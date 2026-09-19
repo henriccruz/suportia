@@ -29,7 +29,8 @@ def generate_response(message_text: str, customer_name: str | None = None) -> st
 
     response = get_client().messages.create(
         model=settings.anthropic_model,
-        max_tokens=500,
+        # Thinking e resposta dividem este orçamento; 500 truncava a resposta.
+        max_tokens=2000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
