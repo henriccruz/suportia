@@ -23,11 +23,14 @@ app.include_router(router)
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
-    # Criar usuário admin padrão se não existir
+    # Cria o usuário admin inicial se ainda não existir.
     db = SessionLocal()
-    admin = db.query(User).filter(User.username == "admin").first()
+    admin = db.query(User).filter(User.username == settings.admin_username).first()
     if not admin:
-        admin_user = User(username="admin", hashed_password=hash_password("admin"))
+        admin_user = User(
+            username=settings.admin_username,
+            hashed_password=hash_password(settings.admin_password),
+        )
         db.add(admin_user)
         db.commit()
     db.close()

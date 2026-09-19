@@ -18,5 +18,12 @@ class Settings(BaseSettings):
 
     stripe_api_key: str = ""
 
+    # Segredo de assinatura dos tokens JWT - deve vir de variável de ambiente
+    # em qualquer ambiente real. O fallback abaixo só existe para dev local.
+    secret_key: str = "dev-only-insecure-secret-do-not-use-in-production"
+
+    admin_username: str = "admin"
+    admin_password: str = "admin"
+
 
 settings = Settings()
