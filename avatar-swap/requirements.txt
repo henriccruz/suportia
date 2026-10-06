@@ -1,0 +1,5 @@
+# Provider padrão (Genjutsu / Higgsfield)
+higgsfield-client>=0.2.0
+
+# Provider alternativo (Wan 2.2 Animate via fal.ai) — opcional
+fal-client>=0.5.0
